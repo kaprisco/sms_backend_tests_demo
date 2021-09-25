@@ -106,8 +106,8 @@ class CourseTest extends ApiTestCase
             ->create();
 
         /** @var User $student */
-        $student = User::factory(['name' => 'Student B'])->create()->assignRole('Student');
-        $student2 = User::factory(['name' => 'Student C'])->create()->assignRole('Student');
+        $student = User::factory(['name' => 'Student B'])->create()->assignRole(Course::ROLE_STUDENT);
+        $student2 = User::factory(['name' => 'Student C'])->create()->assignRole(Course::ROLE_STUDENT);
 
         // Add this Student to the Course.
         $this->postJson(
@@ -149,7 +149,7 @@ class CourseTest extends ApiTestCase
             ->assertJsonFragment(['name' => $course->term->name]);
 
         // Remove permission and the course should be no more accessible
-        $this->teacherUser1->removeRole('Teacher');
+        $this->teacherUser1->removeRole(Course::ROLE_TEACHER);
 
         $this->get("/api/courses/{$course->id}")
             ->assertJsonFragment(['code' => (string) Response::HTTP_UNAUTHORIZED]);

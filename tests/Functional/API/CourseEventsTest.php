@@ -58,8 +58,8 @@ class CourseEventsTest extends ApiTestCase
             ->assertJsonFragment(['summary' => 'Chemistry']);
 
         /** @var User $student */
-        $student = User::factory(['name' => 'Student B'])->create()->assignRole('Student');
-        $student2 = User::factory(['name' => 'Student C'])->create()->assignRole('Student');
+        $student = User::factory(['name' => 'Student B'])->create()->assignRole(Course::ROLE_STUDENT);
+        $student2 = User::factory(['name' => 'Student C'])->create()->assignRole(Course::ROLE_STUDENT);
 
         // Add these Students to the Course.
         $this->postJson(

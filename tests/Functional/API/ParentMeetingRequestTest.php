@@ -6,6 +6,7 @@ use App\Http\ApiCodes;
 use App\Models\Alarm;
 use App\Models\Calendar;
 use App\Models\Calendars\CalendarParentTeacher;
+use App\Models\Course;
 use Carbon\Carbon;
 use OwenIt\Auditing\Models\Audit;
 use Tests\ApiTestCase;
@@ -162,7 +163,7 @@ class ParentMeetingRequestTest extends ApiTestCase
     {
         $startAt = Carbon::now()->addHour()->startOfHour();
 
-        $this->teacherUser1->removeRole('Teacher');
+        $this->teacherUser1->removeRole(Course::ROLE_TEACHER);
 
         $this->actingAs($this->parentUser);
         $response = $this->postJson(
@@ -226,7 +227,7 @@ class ParentMeetingRequestTest extends ApiTestCase
             ->assertJsonFragment(['title' => 'Your request is unauthorized'])
             ->assertJsonFragment(['code' => ApiCodes::UNAUTHORIZED]);
 
-        $this->teacherUser1->removeRole('Teacher');
+        $this->teacherUser1->removeRole(Course::ROLE_TEACHER);
         $response = $this->get('/api/meetings/parent/' . $event->getKey());
         $response->assertJsonFragment(['message' => 'Unauthorized']);
     }

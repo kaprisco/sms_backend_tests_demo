@@ -5,6 +5,7 @@ namespace Tests\Functional\API;
 use App\Http\ApiCodes;
 use App\Models\Calendar;
 use App\Models\Calendars\CalendarTeacherParent;
+use App\Models\Course;
 use Carbon\Carbon;
 use Tests\ApiTestCase;
 
@@ -184,7 +185,7 @@ class TeacherMeetingRequestTest extends ApiTestCase
             ->assertJsonFragment(['status' => Calendar::STATUS_UNCONFIRMED])
             ->assertJsonFragment(['organizer_user_id' => $this->teacherUser1->getKey()]);
 
-        $this->teacherUser1->removeRole('Teacher');
+        $this->teacherUser1->removeRole(Course::ROLE_TEACHER);
         $response = $this->get('/api/meetings/teacher/' . $event->id);
         $response->assertJsonFragment(['message' => 'Unauthorized']);
     }

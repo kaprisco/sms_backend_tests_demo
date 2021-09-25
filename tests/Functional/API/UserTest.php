@@ -3,6 +3,7 @@
 namespace Tests\Functional\API;
 
 use App\Http\ApiCodes;
+use App\Models\Course;
 use App\Models\User;
 use Tests\ApiTestCase;
 
@@ -28,6 +29,37 @@ class UserTest extends ApiTestCase
         $response = $this->get('/api/users/' . $id);
         $response->assertJsonFragment(['email' => $this->user->email]);
         $response->assertJsonFragment(['name' => $this->user->name]);
+    }
+
+    /**
+     * Test we can retrieve only Students.
+     */
+    public function testGetStudents()
+    {
+        $student1 = User::factory()->create([
+            'name' => 'Student A',
+            'email' => 'studentA@gmail.com',
+        ]);
+        $student1->assignRole(Course::ROLE_STUDENT);
+        $student1->parents()->attach([$this->parentUser->getKey()]);
+
+        $response = $this->get('/api/users/students');
+
+        $response->assertJsonFragment(['email' => $student1->email]);
+        $response->assertJsonFragment(['name' => $student1->name]);
+        $response->assertDontSeeText(['Teacher']);
+    }
+
+    /**
+     * Test we can retrieve only Teachers.
+     */
+    public function testGetTeachers()
+    {
+        $response = $this->get('/api/users/teachers');
+
+        $response->assertJsonFragment(['email' => $this->teacherUser1->email]);
+        $response->assertJsonFragment(['name' => $this->teacherUser1->name]);
+        $response->assertDontSeeText(['Admin']);
     }
 
     /**

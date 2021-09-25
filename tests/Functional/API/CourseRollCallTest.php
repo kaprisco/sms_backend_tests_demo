@@ -26,7 +26,7 @@ class CourseRollCallTest extends ApiTestCase
 
         /** @var User $student */
         $student = User::factory(['name' => 'Student'])->afterCreating(function (User $user) {
-            $user->assignRole('Student');
+            $user->assignRole(Course::ROLE_STUDENT);
         })->create();
 
         $this->course = Course::factory([
@@ -76,8 +76,8 @@ class CourseRollCallTest extends ApiTestCase
         $this->get("/api/calendars/" . $event->getKey());
 
         /** @var User $student */
-        $student1 = User::factory(['name' => 'Student B'])->create()->assignRole('Student');
-        $student2 = User::factory(['name' => 'Student C'])->create()->assignRole('Student');
+        $student1 = User::factory(['name' => 'Student B'])->create()->assignRole(Course::ROLE_STUDENT);
+        $student2 = User::factory(['name' => 'Student C'])->create()->assignRole(Course::ROLE_STUDENT);
 
 //        dump($student->getKey(), $student2->getKey());
         // Add these Students to the Course.

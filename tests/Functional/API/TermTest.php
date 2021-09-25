@@ -4,6 +4,7 @@ namespace Tests\Functional\API;
 
 use App\Http\ApiCodes;
 use App\Http\Controllers\API\Transformers\TermTransformer;
+use App\Models\Course;
 use App\Models\Term;
 use Illuminate\Database\Eloquent\Factories\Sequence;
 use Illuminate\Http\Response;
@@ -73,7 +74,7 @@ class TermTest extends ApiTestCase
             ->assertJsonFragment(['id' => $term->getKey()]);
 
         // Remove permission and the course should be no more accessible
-        $this->teacherUser1->removeRole('Teacher');
+        $this->teacherUser1->removeRole(Course::ROLE_TEACHER);
 
         $this->get("/api/terms/{$term->id}")
             ->assertJsonFragment(['code' => (string) Response::HTTP_UNAUTHORIZED]);

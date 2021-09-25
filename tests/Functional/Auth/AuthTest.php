@@ -14,8 +14,9 @@ class AuthTest extends TestCase
      */
     public function testSanctumAuth()
     {
-        $response = $this->get('/sanctum/csrf-cookie');
+        $response = $this->get('/api/csrf-cookie', ['accept' => 'application/json']);
         $xsrf = $this->getCookie($response, 'XSRF-TOKEN', false);
         $this->assertNotNull($xsrf);
+        $response->assertSee('csrf_token');
     }
 }
