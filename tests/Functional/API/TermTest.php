@@ -18,7 +18,7 @@ class TermTest extends ApiTestCase
     {
         parent::setUp();
         // Disable auditing from this point on
-        Term::disableAuditing();
+//        Term::disableAuditing();
 
         $this->assertTrue($this->teacherUser1->can('term.create'));
         $this->actingAs($this->teacherUser1);

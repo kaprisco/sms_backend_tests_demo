@@ -15,14 +15,11 @@ class AlarmModelTest extends FunctionalTestCase
      */
     public function testAlarmRelations()
     {
-        $school = School::factory()->create();
-        $this->user->school()->associate($school)->save();
-
         $alarm = Alarm::initiate($this->user, 'something');
 
         $this->assertNotEmpty($alarm->id);
         // validate relationships.
-        $this->assertEquals($school->id, $alarm->school->id);
+        $this->assertEquals($this->user->school_id, $alarm->school->id);
         $this->assertEquals($this->user->id, $alarm->user->id);
     }
 
@@ -33,8 +30,8 @@ class AlarmModelTest extends FunctionalTestCase
      */
     public function testAlarmModel()
     {
-        $school = School::factory()->create();
-        $this->user->school()->associate($school)->save();
+//        $school = School::factory()->create();
+//        $this->user->school()->associate($school)->save();
 
         $alarm = Alarm::arm($this->user, 'something');
         $alarm->save();
@@ -56,7 +53,7 @@ class AlarmModelTest extends FunctionalTestCase
         $this->assertEquals('This user set the alarm', $alarm->disarm($this->user));
 
         // Create 3 users to disarm the Alarm.
-        $users = User::factory()->count(3)->create(['school_id' => $school]);
+        $users = User::factory()->count(3)->create();
         foreach ($users as $user) {
             $this->assertTrue($alarm->disarm($user));
         }

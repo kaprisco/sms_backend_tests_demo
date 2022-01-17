@@ -8,6 +8,7 @@ use App\Models\Calendar;
 use App\Models\Calendars\CalendarParentTeacher;
 use App\Models\Course;
 use Carbon\Carbon;
+use Illuminate\Notifications\DatabaseNotification;
 use OwenIt\Auditing\Models\Audit;
 use Tests\ApiTestCase;
 
@@ -33,7 +34,8 @@ class ParentMeetingRequestTest extends ApiTestCase
         );
         $response->assertJsonFragment(['title' => 'Failed model validation'])
             ->assertJsonFragment([
-                'message' => 'data.attributes.reason: The data.attributes.reason field is required.'])
+                'message' => 'data.attributes.reason: The data.attributes.reason field is required.'
+            ])
             ->assertJsonFragment([
                 'message' => 'data.attributes.start_at: The data.attributes.start at field is required.'
             ]);
@@ -49,18 +51,23 @@ class ParentMeetingRequestTest extends ApiTestCase
             'school_id' => $this->user->school_id,
             'reason' => 'Something important',
             'summary' => 'I would like to discuss the following...',
-            'attendees' => [['user_id' => $this->teacherUser1->getKey()]],
             'start_at' => (string)$startAt,
             'end_at' => $startAt->addMinutes(30),
+            'updated_at' => now()->subYear(),
         ]);
+        $meeting->attendees()->sync([$this->teacherUser1->getKey()]);
 
         $this->actingAs($this->teacherUser1);
 
         $response = $this->patchJson(
             '/api/meetings/parent/' . $meeting->getKey() . '/change_status',
-            ['data' => ['attributes' => [
-                'status' => Calendar::STATUS_REJECTED,
-            ]]]
+            [
+                'data' => [
+                    'attributes' => [
+                        'status' => Calendar::STATUS_REJECTED,
+                    ]
+                ]
+            ]
         );
         $response->assertJsonFragment(['attendee_status' => Calendar::STATUS_REJECTED]);
     }
@@ -74,18 +81,23 @@ class ParentMeetingRequestTest extends ApiTestCase
             'school_id' => $this->user->school_id,
             'reason' => 'Something important',
             'summary' => 'I would like to discuss the following...',
-            'attendees' => [['user_id' => $this->teacherUser1->getKey()]],
             'start_at' => (string)$startAt,
             'end_at' => $startAt->addMinutes(30),
+            // This will allow the model to be touched, and it will fire update event.
+            'updated_at' => now()->subYear(),
         ]);
-
+        $meeting->attendees()->sync([$this->teacherUser1->getKey()]);
         $this->actingAs($this->teacherUser1);
 
         $response = $this->patchJson(
             '/api/meetings/parent/' . $meeting->getKey() . '/change_status',
-            ['data' => ['attributes' => [
-                'status' => Calendar::STATUS_CONFIRMED,
-            ]]]
+            [
+                'data' => [
+                    'attributes' => [
+                        'status' => Calendar::STATUS_CONFIRMED,
+                    ]
+                ]
+            ]
         );
         $response->assertJsonFragment(['attendee_status' => Calendar::STATUS_CONFIRMED])
             ->assertJsonFragment(['status' => CalendarParentTeacher::STATUS_WAITING_MANAGER_CONFIRM]);
@@ -104,15 +116,19 @@ class ParentMeetingRequestTest extends ApiTestCase
         $response = $this->get('/api/meetings/parent/confirm/666')
             ->assertJsonFragment(['code' => ApiCodes::ENDPOINT_NOT_FOUND]);
 
-        $response = $this->get('/api/meetings/parent/confirm/'.$meeting->getKey());
+        $response = $this->get('/api/meetings/parent/confirm/' . $meeting->getKey());
         $response->assertJsonFragment(['status' => CalendarParentTeacher::STATUS_WAITING_MANAGER_CONFIRM]);
 
-        // Finally the event should be confirmed by Supervisor.
+        // Finally, the event should be confirmed by Supervisor.
         $response = $this->patchJson(
             '/api/meetings/parent/confirm/' . $meeting->getKey(),
-            ['data' => ['attributes' => [
-                'status' => Calendar::STATUS_CONFIRMED,
-            ]]]
+            [
+                'data' => [
+                    'attributes' => [
+                        'status' => Calendar::STATUS_CONFIRMED,
+                    ]
+                ]
+            ]
         );
         $response->assertJsonFragment(['status' => Calendar::STATUS_CONFIRMED]);
 
@@ -133,27 +149,31 @@ class ParentMeetingRequestTest extends ApiTestCase
         $this->actingAs($this->parentUser);
         $response = $this->postJson(
             '/api/meetings/parent',
-            ['data' => ['attributes' => [
-                'reason' => 'Something important',
-                'attendees' => [['user_id' => $this->teacherUser1->getKey()]],
-                'summary' => 'I would like to discuss the following...',
-                'organizer_id' => $this->teacherUser1->getKey(),
-                'start_at' => (string)$startAt,
-            ]]]
+            [
+                'data' => [
+                    'attributes' => [
+                        'reason' => 'Something important',
+                        'attendees' => [['user_id' => $this->teacherUser1->getKey()]],
+                        'summary' => 'I would like to discuss the following...',
+                        // Should not be taken into consideration.
+                        'organizer_id' => $this->teacherUser1->getKey(),
+                        'start_at' => (string)$startAt,
+                    ]
+                ]
+            ]
         );
 
         $response->assertJsonFragment(['reason' => 'Something important'])
             ->assertJsonFragment(['summary' => 'I would like to discuss the following...'])
             ->assertJsonFragment(['status' => Calendar::STATUS_UNCONFIRMED])
             ->assertJsonFragment(['organizer_user_id' => $this->parentUser->getKey()])
-            ->assertJsonFragment(['attendees' => [
-                [
-                    'user_id' => $this->teacherUser1->getKey(),
-                    "attendee_status" => Calendar::STATUS_UNCONFIRMED
-                ]
-            ]])
+            ->assertJsonFragment(['user_id' => $this->teacherUser1->getKey()])
+            ->assertJsonFragment(["attendee_status" => Calendar::STATUS_UNCONFIRMED])
             ->assertJsonFragment(['start_at' => $startAt->toIso8601String()])
             ->assertJsonFragment(['end_at' => $startAt->addMinutes(30)->toIso8601String()]);
+
+        // There should be two notifications, one for organizer, the second for attendee.
+        $this->assertCount(2, DatabaseNotification::all());
     }
 
     /**
@@ -168,12 +188,16 @@ class ParentMeetingRequestTest extends ApiTestCase
         $this->actingAs($this->parentUser);
         $response = $this->postJson(
             '/api/meetings/parent',
-            ['data' => ['attributes' => [
-                'reason' => 'Something important',
-                'attendees' => [['user_id' => $this->teacherUser1->getKey()]],
-                'summary' => 'I would like to discuss the following...',
-                'start_at' => (string)$startAt,
-            ]]]
+            [
+                'data' => [
+                    'attributes' => [
+                        'reason' => 'Something important',
+                        'attendees' => [['user_id' => $this->teacherUser1->getKey()]],
+                        'summary' => 'I would like to discuss the following...',
+                        'start_at' => (string)$startAt,
+                    ]
+                ]
+            ]
         );
 
         $response->assertJsonFragment(['message' => 'Wrong Attendee'])
@@ -197,7 +221,7 @@ class ParentMeetingRequestTest extends ApiTestCase
             ->assertJsonFragment(['status' => Calendar::STATUS_UNCONFIRMED])
             ->assertJsonFragment(['organizer_user_id' => $this->parentUser->getKey()]);
 
-        $this->parentUser->removeRole('Parent');
+        $this->parentUser->removeRole(Course::ROLE_PARENT);
 
         $response = $this->get('/api/meetings/parent/' . $event->id);
         $response->assertJsonFragment(['message' => 'Unauthorized']);
@@ -209,9 +233,9 @@ class ParentMeetingRequestTest extends ApiTestCase
             'kind' => CalendarParentTeacher::$kind,
             'school_id' => $this->user->school_id,
             'reason' => 'Something important',
-            'attendees' => [['user_id' => $this->teacherUser1->getKey()]],
             'organizer_id' => $this->parentUser->getKey(),
         ]);
+        $event->attendees()->sync([$this->teacherUser1->getKey()]);
 
         // Request the event as the attendee.
         $this->actingAs($this->teacherUser1);

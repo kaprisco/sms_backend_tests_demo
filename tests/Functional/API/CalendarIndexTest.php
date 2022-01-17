@@ -17,32 +17,36 @@ class CalendarIndexTest extends ApiTestCase
     {
         parent::setUp();
 
-        CalendarTeacherParent::factory()->create([
+        $calendar = CalendarTeacherParent::factory()->create([
             'organizer_id' => $this->teacherUser1->getKey(),
             'school_id' => $this->teacherUser1->school_id,
             'reason' => 'Something important',
             'summary' => 'I would like to discuss the following...',
-            'attendees' => [
-                ['user_id' => $this->parentUser->getKey()],
-                ['user_id' => $this->parentUser2->getKey()]
-            ],
+//            'attendees' => [
+//                ['user_id' => $this->parentUser->getKey()],
+//                ['user_id' => $this->parentUser2->getKey()]
+//            ],
         ]);
-        CalendarParentTeacher::factory()->create([
+        $calendar->attendees()->syncWithoutDetaching([$this->parentUser->getKey(),$this->parentUser2->getKey()]);
+
+        $calendar = CalendarParentTeacher::factory()->create([
             'organizer_id' => $this->parentUser->getKey(),
             'school_id' => $this->user->school_id,
             'reason' => 'Something important',
             'summary' => 'Something to discuss...',
-            'attendees' => [['user_id' => $this->teacherUser1->getKey()]],
+//            'attendees' => [['user_id' => $this->teacherUser1->getKey()]],
         ]);
+        $calendar->attendees()->syncWithoutDetaching([$this->teacherUser1->getKey()]);
 
         // This event should be visible only to admin, we'll request from parentUser and teacherUser1
-        CalendarParentTeacher::factory()->create([
+        $calendar = CalendarParentTeacher::factory()->create([
             'organizer_id' => $this->parentUser->getKey(),
             'school_id' => $this->user->school_id,
             'reason' => 'Not seen',
             'summary' => 'Not seen...',
-            'attendees' => [['user_id' => $this->teacherUser2->getKey()]],
+//            'attendees' => [['user_id' => $this->teacherUser2->getKey()]],
         ]);
+        $calendar->attendees()->syncWithoutDetaching([$this->teacherUser2->getKey()]);
     }
 
     public function testCalendarIndex()
@@ -53,20 +57,45 @@ class CalendarIndexTest extends ApiTestCase
 
         $this->user->givePermissionTo(['calendar.index', 'calendar.view']);
 
-        // Admin user requesting calendar list here, so both events would be returned back.
-        $this->get('/api/calendars')
+        // Admin user requesting calendar list here, so both events would be returned.
+        $this->actingAs($this->adminUser)->get('/api/calendars')
             // Admin should see all the events
             ->assertJsonFragment(['total' => 3])
             ->assertJsonFragment(['attendee_status' => Calendar::STATUS_UNCONFIRMED])
+            // See the Calendar types.
+            ->assertJsonFragment(['type' => 'teacher_parent'])
+            ->assertJsonFragment(['type' => 'parent_teacher'])
             ->assertJsonFragment(['status' => CalendarTeacherParent::STATUS_UNCONFIRMED]);
+    }
+
+    public function testCalendarIndexFilter()
+    {
+        $this->actingAs($this->adminUser)->get('/api/calendars?type=teacher_parent')
+            // Admin should see all the events
+            ->assertJsonFragment(['total' => 1])
+            // See the Calendar types.
+            ->assertJsonFragment(['type' => 'teacher_parent']);
+    }
+
+    public function testCalendarIndexSearch()
+    {
+        $this->actingAs($this->adminUser)->get('/api/calendars?q=something')
+            // Admin should see all the events
+            ->assertJsonFragment(['total' => 2])
+            // See the Calendar types.
+            ->assertJsonFragment(['reason' => 'Something important']);
+
+        $this->get('/api/calendars?q=following')
+            // Admin should see all the events
+            ->assertJsonFragment(['total' => 1])
+            // See the Calendar types.
+            ->assertJsonFragment(['summary' => 'I would like to discuss the following...']);
     }
 
     public function testCalendarAudits()
     {
-        $this->user->givePermissionTo(['audit.view', 'calendar.index', 'calendar.view']);
-
-        // Admin user requesting calendar list here, so both events would be returned back.
-        $this->get('/api/calendars?include=audit')
+        // Admin user requesting calendar list here, so both events would be returned.
+        $this->actingAs($this->adminUser)->get('/api/calendars?include=audit')
             ->assertJsonFragment(['total' => 3])
             ->assertJsonFragment(['attendee_status' => Calendar::STATUS_UNCONFIRMED])
             ->assertJsonFragment(['status' => CalendarTeacherParent::STATUS_UNCONFIRMED]);
@@ -77,6 +106,7 @@ class CalendarIndexTest extends ApiTestCase
         $this->actingAs($this->teacherUser1);
         $this->teacherUser1->givePermissionTo(['calendar.index', 'calendar.view']);
 
+        $this->enableSqlDebug();
         // Organizers could see their own events.
         // And the events they are attendee of.
         $this->get('/api/calendars')

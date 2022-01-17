@@ -4,6 +4,7 @@ namespace Tests\Functional\API;
 
 use App\Http\ApiCodes;
 use App\Http\Controllers\API\Transformers\CourseTransformer;
+use App\Models\Calendar;
 use App\Models\Course;
 use App\Models\Term;
 use App\Models\User;
@@ -16,12 +17,21 @@ class CourseTest extends ApiTestCase
 {
     private Term $term;
 
+    private static array $customData = [
+        'logo' => 'somelogo.svg',
+        'color' => 'black',
+        'description' => 'Here is the Class description',
+        'location' => 'Room 101',
+    ];
+
     public function setUp(): void
     {
         parent::setUp();
         // Disable auditing from this point on
         Course::disableAuditing();
-        Course::truncate();
+        Course::withTrashed()->get()->each(function (Course $item) {
+            $item->forceDelete();
+        });
 
         $this->assertTrue($this->teacherUser1->can('course.create'));
         $this->actingAs($this->teacherUser1);
@@ -57,10 +67,14 @@ class CourseTest extends ApiTestCase
      */
     public function testCreateWrongTerm()
     {
-        $this->postJson('/api/courses', ['data' => ['attributes' => [
-            'term_id' => 666,
-            'name' => 'Chemistry',
-        ]]])
+        $this->postJson('/api/courses', [
+            'data' => [
+                'attributes' => [
+                    'term_id' => 666,
+                    'name' => 'Chemistry',
+                ]
+            ]
+        ])
             ->assertJsonFragment(['code' => ApiCodes::DB_ERROR]);
     }
 
@@ -70,17 +84,44 @@ class CourseTest extends ApiTestCase
      */
     public function testCreateCourse()
     {
-        $response = $this->postJson('/api/courses', ['data' => ['attributes' => [
-            'term_id' => $this->term->getKey(),
-            'name' => 'Chemistry',
-        ]]])
-            ->assertJsonFragment(['type' => CourseTransformer::JSON_OBJ_TYPE]);
+        /** @var User $student */
+        $student = User::factory(['name' => 'Student B'])->create()->assignRole(Course::ROLE_STUDENT);
+        $student2 = User::factory(['name' => 'Student C'])->create()->assignRole(Course::ROLE_STUDENT);
+//        $teacherB = User::factory(['name' => 'Teacher B'])->create()->assignRole(Course::ROLE_TEACHER);
+
+        $response = $this->postJson('/api/courses?include=users', [
+            'data' => [
+                'attributes' => [
+                    'term_id' => $this->term->getKey(),
+                    'name' => 'Ch',
+                    'data' => self::$customData,
+                    // pass users array of students to be added
+                    'users' => [
+                        ['user_id' => $student->getKey(), 'course_role' => Course::ROLE_STUDENT],
+                        ['user_id' => $student2->getKey(), 'course_role' => Course::ROLE_STUDENT],
+                        ['user_id' => $this->teacherUser1->getKey(), 'course_role' => Course::ROLE_TEACHER],
+                    ]
+                ]
+            ]
+        ])
+            ->assertJsonFragment(['type' => CourseTransformer::JSON_OBJ_TYPE])
+            // Validates both Students has been added.
+            ->assertJsonFragment(['name' => 'Student C'])
+            ->assertJsonFragment(['name' => 'Student B'])
+            ->assertJsonFragment(['course_role' => Course::ROLE_STUDENT])
+            ->assertJsonFragment(['name' => 'Teacher A'])
+            ->assertJsonFragment(['course_role' => Course::ROLE_TEACHER]);
 
         $result = $response->decodeResponseJson()['data']['attributes'];
         $this->assertNotNull('id');
         $this->assertNotNull($result['created_at']);
         $this->assertNotNull($result['updated_at']);
+        $this->assertEquals(self::$customData, $result['data']);
+
         $this->assertNull($result['start_at']);
+
+        // Validate the issue when primary_teacher and teacher are the same, this should not give a duplicated Course.
+        $this->get('/api/courses')->assertJsonFragment(['count' => 1]);
     }
 
     public function testAddCourseWrongUser()
@@ -93,9 +134,11 @@ class CourseTest extends ApiTestCase
         // Add this Student to the Course.
         $this->postJson(
             "/api/courses/{$course->id}/add_students?include=users",
-            ['users' => [
-                ['user_id' => $student3->getKey(), 'course_role' => Course::ROLE_STUDENT],
-            ]]
+            [
+                'users' => [
+                    ['user_id' => $student3->getKey(), 'course_role' => Course::ROLE_STUDENT],
+                ]
+            ]
         )->assertJsonFragment(['message' => 'User is not a Student or Teacher']);
     }
 
@@ -109,24 +152,41 @@ class CourseTest extends ApiTestCase
         $student = User::factory(['name' => 'Student B'])->create()->assignRole(Course::ROLE_STUDENT);
         $student2 = User::factory(['name' => 'Student C'])->create()->assignRole(Course::ROLE_STUDENT);
 
+        $this->assertCount(1, Course::all());
+        /** @var User $student0 */
+        $student0 = User::whereName('Student')->first();
+        $student0->assignRole(Course::ROLE_STUDENT);
+
         // Add this Student to the Course.
         $this->postJson(
             "/api/courses/{$course->id}/add_students?include=users",
-            ['users' => [
-                ['user_id' => $student->getKey(), 'course_role' => Course::ROLE_STUDENT],
-                ['user_id' => $student2->getKey(), 'course_role' => Course::ROLE_STUDENT],
-            ]]
+            [
+                'users' => [
+                    ['user_id' => $student->getKey(), 'course_role' => Course::ROLE_STUDENT],
+                    ['user_id' => $student2->getKey(), 'course_role' => Course::ROLE_STUDENT],
+                    ['user_id' => User::whereName('Student')->first()->getKey(), 'course_role' => Course::ROLE_STUDENT],
+                    [
+                        'user_id' => User::whereName('Teacher A')->first()->getKey(),
+                        'course_role' => Course::ROLE_PRIMARY_TEACHER
+                    ],
+                ]
+            ]
         )->assertJsonFragment(['name' => 'Student'])
             ->assertJsonFragment(['name' => 'Student B'])
             ->assertJsonFragment(['course_role' => Course::ROLE_STUDENT]);
 
-        // Delete Student to the Course.
+        $this->assertCount(1, Course::all());
+        $response = $this->get("/api/courses/");
+
+        // Delete Student from the Course.
         $this->postJson(
             "/api/courses/{$course->id}/delete_students?include=users",
-            ['users' => [
-                // Delete Student B.
-                ['user_id' => $student->getKey()],
-            ]]
+            [
+                'users' => [
+                    // Delete Student B.
+                    ['user_id' => $student->getKey()],
+                ]
+            ]
         )->assertJsonFragment(['name' => 'Student'])
             ->assertDontSeeText('Student B')
             ->assertJsonFragment(['course_role' => Course::ROLE_STUDENT]);
@@ -152,11 +212,11 @@ class CourseTest extends ApiTestCase
         $this->teacherUser1->removeRole(Course::ROLE_TEACHER);
 
         $this->get("/api/courses/{$course->id}")
-            ->assertJsonFragment(['code' => (string) Response::HTTP_UNAUTHORIZED]);
+            ->assertJsonFragment(['code' => (string)Response::HTTP_UNAUTHORIZED]);
 
         // Teacher 2 cannot access that Course, since he is not associated with the Course.
         $this->actingAs($this->teacherUser2)->get("/api/courses/{$course->id}")
-            ->assertJsonFragment(['code' => (string) Response::HTTP_UNAUTHORIZED]);
+            ->assertJsonFragment(['code' => (string)Response::HTTP_UNAUTHORIZED]);
     }
 
     /**
@@ -186,8 +246,8 @@ class CourseTest extends ApiTestCase
 
         // Validate Term includes, both Courses should be displayed.
         $this->get('/api/courses?include=term')
-        ->assertJsonFragment(['name' => 'Term 2020'])
-        ->assertJsonFragment(['name' => 'Term 2021']);
+            ->assertJsonFragment(['name' => 'Term 2020'])
+            ->assertJsonFragment(['name' => 'Term 2021']);
     }
 
     /**
@@ -224,19 +284,55 @@ class CourseTest extends ApiTestCase
         // Primary teacher can change the name.
         $response = $this->patchJson(
             '/api/courses/' . $course1->getKey(),
-            ['data' => ['attributes' => [
-                'name' => 'Chem2',
-            ]]]
+            [
+                'data' => [
+                    'attributes' => [
+                        'name' => 'Chem2',
+                        'data' => self::$customData,
+                    ]
+                ]
+            ]
         );
         $response->assertJsonFragment(['name' => 'Chem2']);
+        $this->assertEquals(self::$customData, $response->decodeResponseJson()['data']['attributes']['data']);
 
         // Secondary teacher can change the name.
         $response = $this->actingAs($this->teacherUser2)->patchJson(
             '/api/courses/' . $course1->getKey(),
-            ['data' => ['attributes' => [
-                'name' => 'Chem1',
-            ]]]
+            [
+                'data' => [
+                    'attributes' => [
+                        'name' => 'Chem1',
+                        // but not the custom data.
+                        'data' => ['logo' => 'somelogo2.svg']
+                    ]
+                ]
+            ]
         );
         $response->assertJsonFragment(['name' => 'Chem1']);
+        // Secondary teacher should not be able to change Custom Data.
+        $this->assertEquals(self::$customData, $response->decodeResponseJson()['data']['attributes']['data']);
+    }
+
+    public function testDeleteCourse()
+    {
+        $response = $this->postJson('/api/courses', ['data' => ['attributes' => [
+            'term_id' => $this->term->getKey(),
+            'rrule' => "DTSTART=" . now()->toDateString() . ";FREQ=DAILY;BYDAY=MO,WE",
+            'name' => 'Chemistry',
+        ]]])
+            ->assertJsonFragment(['type' => CourseTransformer::JSON_OBJ_TYPE]);
+
+        $courseId = $response->decodeResponseJson()['data']['id'];
+        $this->assertEquals(9, Calendar::all()->count());
+
+        $this->delete("/api/courses/{$courseId}")->assertStatus(Response::HTTP_ACCEPTED);
+
+        // Validate soft-deleted models count.
+        $this->assertEquals(0, Course::all()->count());
+        $this->assertEquals(1, Course::withTrashed()->count());
+
+        $this->assertEquals(0, Calendar::all()->count());
+        $this->assertEquals(9, Calendar::withTrashed()->count());
     }
 }

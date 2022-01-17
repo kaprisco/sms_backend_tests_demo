@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Models\Course;
+use App\Models\School;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -27,30 +28,35 @@ class ParentStudentRelationshipsTest extends TestCase
     private function setupUsers()
     {
         (new DatabaseSeeder)->run();
+        $school = School::create(['name' => 'School A']);
 
         $this->student1 = User::factory()->create([
             'name' => 'Student A',
             'email' => 'studentA@gmail.com',
+            'school_id' => $school->getKey(),
         ]);
         $this->student1->assignRole(Course::ROLE_STUDENT);
 
         $this->student2 = User::factory()->create([
             'name' => 'Student B',
             'email' => 'studentB@gmail.com',
+            'school_id' => $school->getKey(),
         ]);
         $this->student2->assignRole(Course::ROLE_STUDENT);
 
         $this->parent1 = User::factory()->create([
             'name' => 'Parent AB',
             'email' => 'parentAB@gmail.com',
+            'school_id' => $school->getKey(),
         ]);
-        $this->student1->assignRole('Parent');
+        $this->student1->assignRole(Course::ROLE_PARENT);
 
         $this->parent2 = User::factory()->create([
             'name' => 'Parent B',
             'email' => 'parentB@gmail.com',
+            'school_id' => $school->getKey(),
         ]);
-        $this->parent2->assignRole('Parent');
+        $this->parent2->assignRole(Course::ROLE_PARENT);
     }
 
     public function testParentRelationship()

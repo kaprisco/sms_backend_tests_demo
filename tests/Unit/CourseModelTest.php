@@ -3,7 +3,7 @@
 namespace Tests\Unit;
 
 use App\Models\Course;
-use App\Models\Term;
+use App\Models\School;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -28,28 +28,32 @@ class CourseModelTest extends TestCase
     private function setupUsers()
     {
         (new DatabaseSeeder)->run();
-
+        $school = School::create(['name' => 'School A']);
         $this->teacherUser1 = User::factory()->create([
             'name' => 'Teacher A',
             'email' => 'teacherA@gmail.com',
+            'school_id' => $school->getKey(),
         ]);
         $this->teacherUser1->assignRole(Course::ROLE_TEACHER);
 
         $this->teacherUser2 = User::factory()->create([
             'name' => 'Teacher B',
             'email' => 'teacherB@gmail.com',
+            'school_id' => $school->getKey(),
         ]);
         $this->teacherUser2->assignRole(Course::ROLE_STUDENT);
 
         $this->student1 = User::factory()->create([
             'name' => 'Student A',
             'email' => 'studentA@gmail.com',
+            'school_id' => $school->getKey(),
         ]);
         $this->student1->assignRole(Course::ROLE_STUDENT);
 
         $this->student2 = User::factory()->create([
             'name' => 'Student B',
             'email' => 'studentB@gmail.com',
+            'school_id' => $school->getKey(),
         ]);
         $this->student2->assignRole(Course::ROLE_STUDENT);
     }

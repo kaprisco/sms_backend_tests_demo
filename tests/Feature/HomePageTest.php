@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\School;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Http\Response;
@@ -22,7 +23,7 @@ class HomePageTest extends TestCase
             ->assertStatus(Response::HTTP_FOUND)
             ->assertRedirect('/login');
 
-        $user = User::factory()->create();
+        $user = User::factory(['school_id' => School::factory()->create()->getKey()])->create();
         $this->actingAs($user);
 
         $this->get('/dashboard')

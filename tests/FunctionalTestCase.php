@@ -2,6 +2,8 @@
 
 namespace Tests;
 
+use App\Models\School;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 abstract class FunctionalTestCase extends TestCase
@@ -9,8 +11,8 @@ abstract class FunctionalTestCase extends TestCase
     use CreatesApplication;
     use RefreshDatabase;
 
-    /** @var \App\Models\User */
-    protected $user;
+    /** @var User */
+    protected User $user;
 
     /**
      * Prepare a test DB data, create sample object would be used in all test methods.
@@ -22,8 +24,9 @@ abstract class FunctionalTestCase extends TestCase
         parent::setUp();
 
         try {
-            $this->user = \App\Models\User::factory()->create([
+            $this->user = User::factory()->create([
                 'email' => 'admin@demo.com',
+                'school_id' => School::factory(['name' => 'School A'])->create()->getKey(),
             ]);
             $this->actingAs($this->user);
         } catch (\Exception $exception) {

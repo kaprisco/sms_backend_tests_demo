@@ -5,6 +5,7 @@ namespace Tests\Functional\API;
 use App\Http\ApiCodes;
 use App\Models\Calendar;
 use App\Models\Course;
+use App\Models\Role;
 use App\Models\Term;
 use App\Models\User;
 use Carbon\Carbon;
@@ -19,6 +20,7 @@ class CourseRollCallTest extends ApiTestCase
         parent::setUp();
         // Disable auditing from this point on
         Course::disableAuditing();
+        Calendar::disableAuditing();
         Course::truncate();
 
         $this->assertTrue($this->teacherUser1->can('course.create'));
@@ -45,39 +47,24 @@ class CourseRollCallTest extends ApiTestCase
     }
 
     /**
-     * Creates a new Course, attach a few Students for the Course and check Calendar Events have these
-     * Students as attendees.
      * @throws \Throwable
      */
     public function testRollCall()
     {
-//        $response = $this->postJson('/api/courses', ['data' => ['attributes' => [
-//            'term_id' => $this->term->getKey(),
-//            'rrule' => "DTSTART=" . now()->toDateString() . ";FREQ=DAILY;BYDAY=MO,WE",
-//            'name' => 'Chemistry',
-//        ]]])
-//            ->assertJsonFragment(['type' => CourseTransformer::JSON_OBJ_TYPE]);
-//
-//        $result = $response->decodeResponseJson()['data']['attributes'];
-//        $this->assertNotNull('id');
-//        $this->assertNotNull($result['created_at']);
-//        $this->assertNotNull($result['updated_at']);
-//        $this->assertNull($result['start_at']);
-//        $courseId = $response->decodeResponseJson()['data']['id'];
         $this->teacherUser1->givePermissionTo(['calendar.index', 'calendar.view']);
         $this->actingAs($this->teacherUser1);
-//        $this->actingAs($this->user);
 
         $this->get('/api/courses/' . $this->course->getKey() . '?include=users')
             ->assertJsonFragment(['name' => 'Student']);
 
         $event = Calendar::first();
-//        dump($event->getKey());
-        $this->get("/api/calendars/" . $event->getKey());
 
         /** @var User $student */
-        $student1 = User::factory(['name' => 'Student B'])->create()->assignRole(Course::ROLE_STUDENT);
-        $student2 = User::factory(['name' => 'Student C'])->create()->assignRole(Course::ROLE_STUDENT);
+        $student1 = User::factory(['name' => 'Student B', 'school_id'=> $this->user->school_id])->create()
+            ->assignRole(Course::ROLE_STUDENT);
+
+        $student2 = User::factory(['name' => 'Student C', 'school_id'=> $this->user->school_id])->create()
+            ->assignRole(Course::ROLE_STUDENT);
 
 //        dump($student->getKey(), $student2->getKey());
         // Add these Students to the Course.
@@ -89,9 +76,15 @@ class CourseRollCallTest extends ApiTestCase
             ]]
         )->assertJsonFragment(['student_count' => 3]);
 
+        // List events as a Student
+        $this->actingAs($student2)
+            ->get("/api/calendars/?fields[calendar]=start_at,end_at,summary,my_status")
+            ->assertJsonFragment(['count' => 9]);
 
         // Calendar Events now should have these Students as attendees.
         $this->get("/api/calendars/" . $event->getKey(). '?include=users')
+            // Role should be seen in attendees.
+            ->assertJsonFragment(['role' => Course::ROLE_STUDENT])
             ->assertJsonFragment(['name' => 'Student'])
             ->assertJsonFragment(['name' => 'Student B'])
             ->assertJsonFragment(['name' => 'Student C']);
@@ -99,26 +92,45 @@ class CourseRollCallTest extends ApiTestCase
         // Mark Student B as not present.
         // Student C as present.
         $payload = ['data' => ['attributes' => ['attendees' => [
-            ['user_id' => $student1->getKey(), 'attendee_status' => Calendar::STATUS_REJECTED],
+            ['user_id' => $student1->getKey(), 'attendee_status' => Calendar::STATUS_REJECTED, 'note' => 'kapusta'],
             ['user_id' => $student2->getKey(), 'attendee_status' => Calendar::STATUS_CONFIRMED],
         ]
         ]]];
+
+        $this->teacherUser1->removeRole(Course::ROLE_TEACHER);
 
         // The request should fail w/o proper permission.
         $this->patchJson(
             "/api/calendars/" . $event->getKey() . '?include=users',
             $payload
         )->assertJsonFragment(['message' => 'Unauthorized'])
-        ->assertJsonFragment(['code' => ApiCodes::UNAUTHORIZED]);
+            ->assertJsonFragment(['title' => 'Your roll call update request is unauthorized'])
+            ->assertJsonFragment(['code' => ApiCodes::UNAUTHORIZED]);
 
         // Add the permission.
         $this->teacherUser1->givePermissionTo(['calendar.rollcall']);
+        $this->teacherUser1->assignRole(Course::ROLE_TEACHER);
+
+        // Test passing wrong attendee ID
+        $this->actingAs($this->teacherUser1)->patchJson(
+            "/api/calendars/" . $event->getKey() . '?include=users',
+            [
+                'data' => [
+                    'attributes' => [
+                        'attendees' => [
+                            ['user_id' => 666],
+                        ]
+                    ]
+                ]
+            ]
+        )->assertJsonFragment(['detail' => 'Attendee is not exists, cannot change the status!']);
 
         // Change attendee status.
-        $response = $this->patchJson(
+        $response = $this->actingAs($this->teacherUser1)->patchJson(
             "/api/calendars/" . $event->getKey() . '?include=users',
             $payload
         );
+
         $response = collect($response->decodeResponseJson()['data']['attributes']['attendees']);
 
         // Student2 should be present.
@@ -132,5 +144,30 @@ class CourseRollCallTest extends ApiTestCase
             Calendar::STATUS_REJECTED,
             $response->where('user_id', $student1->getKey())->pluck('attendee_status')->first()
         );
+
+        // Optional note attribute should be recorded along with the status.
+        $this->assertEquals(
+            'kapusta',
+            $response->where('user_id', $student1->getKey())->pluck('note')->first()
+        );
+
+        $this->assertNotNull(
+            $response->where('user_id', $student1->getKey())->pluck('updated_at')->first()
+        );
+
+        // List events as a Student
+        $this->actingAs($student2)
+            ->get("/api/calendars/?fields[calendar]=start_at,end_at,summary,my_status")
+            ->assertJsonFragment(['count' => 9]);
+
+        // Retrieve attendee status as a Student1
+        $this->actingAs($student1)
+            ->get("/api/calendars/{$event->id}?fields[calendar]=start_at,end_at,summary,my_status")
+            ->assertJsonFragment(['my_status' => Calendar::STATUS_REJECTED]);
+
+        // Retrieve attendee status as a Student2
+        $this->actingAs($student2)
+            ->get("/api/calendars/{$event->id}?fields[calendar]=start_at,end_at,summary,my_status")
+            ->assertJsonFragment(['my_status' => Calendar::STATUS_CONFIRMED]);
     }
 }

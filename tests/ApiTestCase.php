@@ -3,6 +3,7 @@
 namespace Tests;
 
 use App\Models\Course;
+use App\Models\School;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -40,40 +41,57 @@ class ApiTestCase extends TestCase
         parent::setUp();
         // Setup database with User, Roles, and Permissions.
         (new DatabaseSeeder)->run();
-        $this->user = User::first();
+
+        $this->user = User::factory([
+            'name' => 'Tester',
+            'email' => 'tester@gmail.com',
+            'school_id' => School::first()->getKey()
+        ])->create();
+
+        setPermissionsTeamId(School::first()->getKey());
+
+        $this->user->givePermissionTo([
+            // alarms
+            'alarm.create',
+            'alarm.view',
+            'alarm.delete',
+        ]);
+//        dd($this->user->getAllPermissions());
         $this->actingAs($this->user);
 
         $this->setupUsers();
     }
 
     /** @var User */
-    protected $teacherUser1;
+    protected User $teacherUser1;
     /** @var User */
-    protected $teacherUser2;
+    protected User $teacherUser2;
     /** @var User */
-    protected $parentUser;
+    protected User $parentUser;
     /** @var User */
-    protected $parentUser2;
+    protected User $parentUser2;
     /** @var User */
-    protected $supervisorUser;
+    protected User $supervisorUser;
+
+    protected User $adminUser;
 
     private function setupUsers()
     {
         /** @var User $teacherUser */
-        $this->teacherUser1 = User::factory()->create([
+        $this->teacherUser1 = User::factory()->asTeacher()->create([
             'name' => 'Teacher A',
             'email' => 'teacherA@gmail.com',
             'school_id' => $this->user->school_id,
         ]);
-        $this->teacherUser1->assignRole(Course::ROLE_TEACHER);
+//        $this->teacherUser1->assignRole(Course::ROLE_TEACHER);
 
         /** @var User $teacherUser */
-        $this->teacherUser2 = User::factory()->create([
+        $this->teacherUser2 = User::factory()->asTeacher()->create([
             'name' => 'Teacher B',
             'email' => 'teacherB@gmail.com',
             'school_id' => $this->user->school_id,
         ]);
-        $this->teacherUser2->assignRole(Course::ROLE_TEACHER);
+//        $this->teacherUser2->assignRole(Course::ROLE_TEACHER);
 
         /** @var User $parentUser */
         $this->parentUser = User::factory()->create([
@@ -81,7 +99,7 @@ class ApiTestCase extends TestCase
             'email' => 'parentA@gmail.com',
             'school_id' => $this->user->school_id,
         ]);
-        $this->parentUser->assignRole('Parent');
+        $this->parentUser->assignRole(Course::ROLE_PARENT);
         // $this->parentUser->givePermissionTo(['meeting.parent_teacher.create', 'meeting.parent_teacher.view']);
 
         /** @var User $parentUser2 */
@@ -90,7 +108,15 @@ class ApiTestCase extends TestCase
             'email' => 'parentB@gmail.com',
             'school_id' => $this->user->school_id,
         ]);
-        $this->parentUser2->assignRole('Parent');
+        $this->parentUser2->assignRole(Course::ROLE_PARENT);
+
+        /** @var User $parentUser2 */
+        $this->adminUser = User::factory()->create([
+            'name' => 'Admin',
+            'email' => 'admin@gmail.com',
+            'school_id' => $this->user->school_id,
+        ]);
+        $this->adminUser->assignRole(Course::ROLE_ADMIN);
 
         /** @var User $supervisorUser */
         $this->supervisorUser = User::factory()->create([
