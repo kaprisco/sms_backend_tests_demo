@@ -15,6 +15,11 @@ class GroupTest extends ApiTestCase
     private Group $groupA;
     private Group $groupB;
 
+    private static array $customData = [
+        'logo' => 'somelogo.svg',
+        'color' => 'black',
+    ];
+
     public function setUp(): void
     {
         parent::setUp();
@@ -55,7 +60,8 @@ class GroupTest extends ApiTestCase
                             ['user_id' => $this->teacherUser2->getKey()],
                             // This user would be filtered out.
                             ['user_id' => $this->parentUser->getKey()],
-                        ]
+                        ],
+                        'data' => self::$customData,
                     ]
                 ]
             ]
@@ -65,6 +71,7 @@ class GroupTest extends ApiTestCase
             // Teachers should be added.
             ->assertJsonFragment(["name" => "Teacher A"])
             ->assertJsonFragment(["name" => "Teacher B"])
+            ->assertJsonFragment(["data" => self::$customData])
         ->assertDontSeeText("Parent A");
 
         // Try to rename the group with other User.

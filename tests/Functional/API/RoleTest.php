@@ -225,10 +225,6 @@ class RoleTest extends ApiTestCase
             ->create();
         $schoolBAdmin->assignRole('admin');
 
-        // User should have role.index permission
-        $this->get('/api/roles')
-            ->assertJsonFragment(['message' => 'Unauthorized']);
-
         $this->actingAs($this->adminUser)->get('/api/roles?include=users')
             ->assertJsonFragment(['name' => 'admin'])
             ->assertJsonFragment(['name' => 'student'])

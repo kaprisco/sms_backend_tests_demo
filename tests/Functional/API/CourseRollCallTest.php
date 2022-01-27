@@ -19,8 +19,8 @@ class CourseRollCallTest extends ApiTestCase
     {
         parent::setUp();
         // Disable auditing from this point on
-        Course::disableAuditing();
-        Calendar::disableAuditing();
+//        Course::disableAuditing();
+//        Calendar::disableAuditing();
         Course::truncate();
 
         $this->assertTrue($this->teacherUser1->can('course.create'));

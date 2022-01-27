@@ -18,7 +18,7 @@ class AlarmTest extends ApiTestCase
     {
         parent::setUp();
         // Disable auditing from this point on
-        Alarm::disableAuditing();
+//        Alarm::disableAuditing();
         Alarm::truncate();
     }
 

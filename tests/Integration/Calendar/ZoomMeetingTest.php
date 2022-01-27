@@ -21,7 +21,7 @@ class ZoomMeetingTest extends ApiTestCase
     {
         parent::setUp();
         // Disable auditing from this point on
-        Course::disableAuditing();
+//        Course::disableAuditing();
         Course::withTrashed()->get()->each(function (Course $item) {
             $item->forceDelete();
         });

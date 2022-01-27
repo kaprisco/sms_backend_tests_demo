@@ -4,6 +4,7 @@ namespace Tests\Functional\API;
 
 use App\Http\Controllers\API\Transformers\CourseTransformer;
 use App\Models\Course;
+use App\Models\Group;
 use App\Models\Room;
 use App\Models\Term;
 use App\Models\User;
@@ -18,7 +19,7 @@ class CourseEventsTest extends ApiTestCase
     {
         parent::setUp();
         // Disable auditing from this point on
-        Course::disableAuditing();
+//        Course::disableAuditing();
         Course::truncate();
 
         $this->assertTrue($this->teacherUser1->can('course.create'));

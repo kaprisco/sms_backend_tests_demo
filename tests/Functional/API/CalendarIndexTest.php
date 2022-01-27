@@ -106,7 +106,7 @@ class CalendarIndexTest extends ApiTestCase
         $this->actingAs($this->teacherUser1);
         $this->teacherUser1->givePermissionTo(['calendar.index', 'calendar.view']);
 
-        $this->enableSqlDebug();
+//        $this->enableSqlDebug();
         // Organizers could see their own events.
         // And the events they are attendee of.
         $this->get('/api/calendars')

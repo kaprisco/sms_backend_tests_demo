@@ -19,9 +19,9 @@ class RoomModelTest extends ApiTestCase
         $room = Room::factory()->create();
         $this->assertNotNull($room);
         $this->assertNotNull($room->school_id);
-        $this->assertEquals([], $room->info);
-        $room->info = ['floor' => 3, 'room_number' => 303];
+        $this->assertEquals([], $room->data);
+        $room->data = ['floor' => 3, 'room_number' => 303];
         $room->save();
-        $this->assertEquals(['floor' => 3, 'room_number' => 303], Room::all()->first()->info);
+        $this->assertEquals(['floor' => 3, 'room_number' => 303], Room::all()->first()->data);
     }
 }

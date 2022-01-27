@@ -36,7 +36,7 @@ class RoomTest extends ApiTestCase
                 'data' => [
                     'attributes' => [
                         'name' => "Room Z",
-                        'info' => [
+                        'data' => [
                             'floor' => 'Z',
                             'room_number' => '#303',
                         ]
@@ -73,7 +73,7 @@ class RoomTest extends ApiTestCase
         $this->assertIsString($id, 'Should be string UUID');
 
         // Just a user cannot retrieve the Room
-        $this->actingAs($this->parentUser)->get('/api/rooms/' . $id)
+        $this->actingAs($this->supervisorUser)->get('/api/rooms/' . $id)
             ->assertJsonFragment(['message' => 'Unauthorized']);
 
         // Admin can retrieve it.

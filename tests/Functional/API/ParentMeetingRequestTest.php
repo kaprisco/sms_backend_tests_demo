@@ -59,8 +59,8 @@ class ParentMeetingRequestTest extends ApiTestCase
 
         $this->actingAs($this->teacherUser1);
 
-        $response = $this->patchJson(
-            '/api/meetings/parent/' . $meeting->getKey() . '/change_status',
+        $this->patchJson(
+            '/api/calendars/' . $meeting->getKey() . '/change_status',
             [
                 'data' => [
                     'attributes' => [
@@ -68,8 +68,9 @@ class ParentMeetingRequestTest extends ApiTestCase
                     ]
                 ]
             ]
-        );
-        $response->assertJsonFragment(['attendee_status' => Calendar::STATUS_REJECTED]);
+        )->assertJsonFragment(['attendee_status' => Calendar::STATUS_REJECTED])
+            // Calendar Event should be properly cast.
+            ->assertJsonFragment(['type' => 'parent_teacher']);
     }
 
     public function testTeacherConfirmation()
@@ -90,7 +91,7 @@ class ParentMeetingRequestTest extends ApiTestCase
         $this->actingAs($this->teacherUser1);
 
         $response = $this->patchJson(
-            '/api/meetings/parent/' . $meeting->getKey() . '/change_status',
+            '/api/calendars/' . $meeting->getKey() . '/change_status',
             [
                 'data' => [
                     'attributes' => [

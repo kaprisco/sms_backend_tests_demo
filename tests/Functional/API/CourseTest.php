@@ -6,6 +6,7 @@ use App\Http\ApiCodes;
 use App\Http\Controllers\API\Transformers\CourseTransformer;
 use App\Models\Calendar;
 use App\Models\Course;
+use App\Models\Group;
 use App\Models\Term;
 use App\Models\User;
 use Carbon\Carbon;
@@ -28,7 +29,7 @@ class CourseTest extends ApiTestCase
     {
         parent::setUp();
         // Disable auditing from this point on
-        Course::disableAuditing();
+//        Course::disableAuditing();
         Course::withTrashed()->get()->each(function (Course $item) {
             $item->forceDelete();
         });
@@ -78,6 +79,7 @@ class CourseTest extends ApiTestCase
             ->assertJsonFragment(['code' => ApiCodes::DB_ERROR]);
     }
 
+
     /**
      * Creates a new Course
      * @throws \Throwable
@@ -94,6 +96,7 @@ class CourseTest extends ApiTestCase
                 'attributes' => [
                     'term_id' => $this->term->getKey(),
                     'name' => 'Ch',
+                    'description' => '<h1>Chemistry</h1>',
                     'data' => self::$customData,
                     // pass users array of students to be added
                     'users' => [
@@ -110,6 +113,7 @@ class CourseTest extends ApiTestCase
             ->assertJsonFragment(['name' => 'Student B'])
             ->assertJsonFragment(['course_role' => Course::ROLE_STUDENT])
             ->assertJsonFragment(['name' => 'Teacher A'])
+            ->assertJsonFragment(['description' => '<h1>Chemistry</h1>'])
             ->assertJsonFragment(['course_role' => Course::ROLE_TEACHER]);
 
         $result = $response->decodeResponseJson()['data']['attributes'];
@@ -122,6 +126,12 @@ class CourseTest extends ApiTestCase
 
         // Validate the issue when primary_teacher and teacher are the same, this should not give a duplicated Course.
         $this->get('/api/courses')->assertJsonFragment(['count' => 1]);
+
+        // Verify Student got notification
+        $this->actingAs($student)->get('/api/notifications')
+            ->assertJsonFragment(['title' => 'You\'ve added to the Course'])
+            ->assertJsonFragment(['entity_type' => 'course'])
+            ->assertJsonFragment(['total' => 1]);
     }
 
     public function testAddCourseWrongUser()
@@ -288,12 +298,14 @@ class CourseTest extends ApiTestCase
                 'data' => [
                     'attributes' => [
                         'name' => 'Chem2',
+                        'description' => '<h1>Chemistry</h1>',
                         'data' => self::$customData,
                     ]
                 ]
             ]
         );
-        $response->assertJsonFragment(['name' => 'Chem2']);
+        $response->assertJsonFragment(['name' => 'Chem2'])
+            ->assertJsonFragment(['description' => '<h1>Chemistry</h1>']);
         $this->assertEquals(self::$customData, $response->decodeResponseJson()['data']['attributes']['data']);
 
         // Secondary teacher can change the name.

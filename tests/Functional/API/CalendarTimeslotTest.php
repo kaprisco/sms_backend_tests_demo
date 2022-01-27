@@ -7,6 +7,7 @@ use App\Models\Calendar;
 use App\Models\Calendars\CalendarSimpleEvent;
 use App\Models\Calendars\CalendarTimeslotEvent;
 use App\Models\Course;
+use App\Models\Room;
 use App\Models\User;
 use Tests\ApiTestCase;
 
@@ -115,14 +116,17 @@ class CalendarTimeslotTest extends ApiTestCase
         $this->actingAs($this->teacherUser1);
 
 //        $this->user->givePermissionTo(['calendar.timeslot.create','calendar.view', 'calendar.index']);
+        /** @var Room $room */
+        $room = Room::factory(['name' => 'Room A'])->create();
 
         $response = $this->postJson(
-            '/api/calendars/timeslot',
+            '/api/calendars/timeslot?include=room',
             [
                 'data' => [
                     'attributes' => [
                         'start_at' => now()->startOfHour(),
                         'end_at' => now()->endOfHour(),
+                        'room_id' => $room->getKey(),
                         'location' => [
                             'type' => 'location',
                             'location_room' => '303',
@@ -134,6 +138,7 @@ class CalendarTimeslotTest extends ApiTestCase
         $response->assertJsonFragment(['start_at' => now()->startOfHour()->toIso8601String()])
             ->assertJsonFragment(['end_at' => now()->endOfHour()->toIso8601String()])
             ->assertJsonFragment(['location_room' => '303'])
+            ->assertJsonFragment(['name' => 'Room A'])
             ->assertJsonFragment(['status' => CalendarTimeslotEvent::STATUS_AVAILABLE]);
 
         CalendarSimpleEvent::factory([

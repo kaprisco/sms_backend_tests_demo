@@ -64,7 +64,7 @@ class TeacherMeetingRequestTest extends ApiTestCase
         $this->actingAs($this->parentUser);
 
         $response = $this->patchJson(
-            '/api/meetings/teacher/' . $meeting->getKey() . '/change_status',
+            '/api/calendars/' . $meeting->getKey() . '/change_status',
             [
                 'data' => [
                     'attributes' => [
@@ -74,20 +74,6 @@ class TeacherMeetingRequestTest extends ApiTestCase
             ]
         );
         $response->assertJsonFragment(['attendee_status' => Calendar::STATUS_REJECTED]);
-
-
-        $this->parentUser->removeRole(Course::ROLE_PARENT);
-        $response = $this->patchJson(
-            '/api/meetings/teacher/' . $meeting->getKey() . '/change_status',
-            [
-                'data' => [
-                    'attributes' => [
-                        'status' => Calendar::STATUS_REJECTED,
-                    ]
-                ]
-            ]
-        );
-        $response->assertJsonFragment(['message' => 'Unauthorized']);
     }
 
     public function testParentConfirmation()
@@ -387,6 +373,8 @@ class TeacherMeetingRequestTest extends ApiTestCase
             ->assertJsonFragment(['user_id' => $this->parentUser2->getKey()])
             ->assertJsonFragment(['attendee_status' => Calendar::STATUS_UNCONFIRMED])
             ->assertJsonFragment(['attendee_status' => Calendar::STATUS_OPTIONAL])
+            // My status as Organizer should be confirmed.
+            ->assertJsonFragment(['my_status' => Calendar::STATUS_CONFIRMED])
 
             ->assertJsonFragment(['start_at' => $startAt->toIso8601String()])
             ->assertJsonFragment(['end_at' => $startAt->addMinutes(10)->toIso8601String()])

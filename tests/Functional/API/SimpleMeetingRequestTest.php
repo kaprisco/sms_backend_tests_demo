@@ -3,7 +3,7 @@
 namespace Tests\Functional\API;
 
 use App\Http\ApiCodes;
-use App\Models\Calendars\CalendarParentTeacher;
+use App\Models\Calendar;
 use App\Models\Calendars\CalendarSimpleEvent;
 use App\Models\Room;
 use Illuminate\Notifications\DatabaseNotification;
@@ -77,6 +77,19 @@ class SimpleMeetingRequestTest extends ApiTestCase
             ->assertJsonFragment(['type' => 'simple'])
             ->assertJsonFragment(['user_id' => $this->parentUser->getKey()])
             ->assertJsonFragment(['user_id' => $this->parentUser2->getKey()]);
+        $meetingId = $response->decodeResponseJson()['data']['id'];
+
+        // Participants could change their own status.
+        $this->actingAs($this->parentUser)->patchJson(
+            '/api/calendars/'. $meetingId . '/change_status',
+            [
+                'data' => [
+                    'attributes' => [
+                        'status' => Calendar::STATUS_REJECTED,
+                    ]
+                ]
+            ]
+        )->assertJsonFragment(['my_status' => Calendar::STATUS_REJECTED]);
 
         // Include should work properly even there is no Course attached to the Simple Event.
         $this->get("/api/calendars?include=course")
@@ -86,8 +99,8 @@ class SimpleMeetingRequestTest extends ApiTestCase
         $this->assertCount(2, DatabaseNotification::all());
 
         $this->actingAs($this->parentUser)
-            ->get("/api/notifications?include=user:fields(name|last_name),user.roles:fields(name)," .
-                "calendar:fields(my_status)")
+            ->get("/api/notifications?type=interview_request,simple&" .
+                "include=user:fields(name|last_name),user.roles:fields(name),calendar:fields(my_status)")
             ->assertJsonFragment(['title' => 'Event created by Teacher A <teacherA@gmail.com>'])
             ->assertJsonFragment(['total' => 1])
             // Organizer name included
@@ -95,7 +108,8 @@ class SimpleMeetingRequestTest extends ApiTestCase
             // Role included.
             ->assertJsonFragment(['name' => 'teacher'])
             // Attendee status included
-            ->assertJsonFragment(['my_status' => 'unconfirmed']);
+            ->assertJsonFragment(['my_status' => Calendar::STATUS_REJECTED])
+            ->assertJsonFragment(['type' => 'simple']);
 
         $event = CalendarSimpleEvent::first();
 
