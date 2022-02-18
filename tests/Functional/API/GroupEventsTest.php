@@ -118,7 +118,7 @@ class GroupEventsTest extends ApiTestCase
 
     public function testCreateCourseGroup()
     {
-        $this->postJson('/api/courses?include=users,groups,groups.users', [
+        $response = $this->postJson('/api/courses?include=users,groups,groups.users', [
             'data' => [
                 'attributes' => [
                     'term_id' => $this->term->getKey(),
@@ -154,6 +154,9 @@ class GroupEventsTest extends ApiTestCase
             ->assertJsonFragment(['name' => 'Student1 Group2'])
             ->assertJsonFragment(['name' => 'Student2 Group2']);
 
+        // There should be relation to 6 Users having student role.
+        $this->assertEquals(6, substr_count($response->getContent(), '"course_role": "student"'));
+
         // Participant of Group should get CourseAttendeeAdded notification.
         $this->actingAs($this->student1)->get('/api/notifications')
             ->assertJsonFragment(['description' => 'Course Chemy'])
@@ -182,10 +185,14 @@ class GroupEventsTest extends ApiTestCase
         $this->groupA->role_filter = Course::ROLE_STUDENT;
         $this->groupA->save();
 
+        $this->enableSqlDebug();
         // Add this Group to the Course.
         $this->postJson(
             "/api/courses/{$course->id}/add_students?include=users,groups,groups.users",
             [
+                'users' => [
+
+                ],
                 'groups' => [
                     ['group_id' => $this->groupA->getKey(), 'course_role' => Course::ROLE_STUDENT],
                 ]

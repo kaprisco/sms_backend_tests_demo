@@ -207,7 +207,12 @@ class CourseTest extends ApiTestCase
      */
     public function testGetCourse()
     {
-        $course = Course::factory(['name' => 'Chem'])->create();
+        $student = User::factory(['name' => 'Student A'])->create()->assignRole(Course::ROLE_STUDENT);
+
+//        $course = Course::factory(['name' => 'Chem'])->create();
+        $course = Course::factory(['name' => 'Chem'])
+            ->hasAttached($student, ['role' => Course::ROLE_STUDENT], 'students')
+            ->create();
 
         $this->get("/api/courses/{$course->id}?include=users,term")
             ->assertJsonFragment(['name' => 'Chem'])
@@ -227,6 +232,9 @@ class CourseTest extends ApiTestCase
         // Teacher 2 cannot access that Course, since he is not associated with the Course.
         $this->actingAs($this->teacherUser2)->get("/api/courses/{$course->id}")
             ->assertJsonFragment(['code' => (string)Response::HTTP_UNAUTHORIZED]);
+
+        $this->actingAs($student)->get("/api/courses/{$course->id}")
+            ->assertJsonFragment(['name' => 'Chem']);
     }
 
     /**
@@ -244,7 +252,7 @@ class CourseTest extends ApiTestCase
         Course::factory(['name' => 'Chem'])->forTerm(['name' => 'Term 2020'])->create();
         Course::factory(['name' => 'Math'])->forTerm(['name' => 'Term 2021'])->create();
 
-        // Validate User includes as well.
+        // Validate User included as well.
         $this->get('/api/courses?include=users')
             ->assertJsonFragment(['name' => $this->teacherUser1->name])
             ->assertJsonFragment(['name' => 'Math'])

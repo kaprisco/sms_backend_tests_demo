@@ -26,13 +26,13 @@ class GroupTest extends ApiTestCase
 
         $this->actingAs($this->teacherUser1);
         $this->groupA = Group::factory()->for(Term::factory())->hasAttached([$this->parentUser, $this->parentUser2])
-            ->create(['name'=>'Group Parents']);
+            ->create(['name' => 'Group Parents']);
         $this->assertEquals($this->groupA->owner_id, $this->teacherUser1->getKey());
 
         $this->actingAs($this->user);
 
         $this->groupB = Group::factory()->for(Term::factory())->hasAttached([$this->teacherUser1, $this->teacherUser2])
-            ->create(['name'=>'Group Teachers']);
+            ->create(['name' => 'Group Teachers']);
         $this->assertEquals($this->groupB->owner_id, $this->user->getKey());
     }
 
@@ -43,6 +43,30 @@ class GroupTest extends ApiTestCase
     {
         $this->get('/api/groups?include=users&per_page=2')
             ->assertSeeText('/groups?include=users');
+    }
+
+    public function testCreateGroupStudents()
+    {
+        $student1 = User::factory(['name' => 'Student A', 'school_id'=> $this->user->school_id])->create()
+            ->assignRole(Course::ROLE_STUDENT);
+
+        $this->actingAs($this->adminUser)->postJson(
+            '/api/groups?include=users',
+            [
+                'data' => [
+                    'attributes' => [
+                        'name' => "Group of Students",
+                        'role_filter' => Course::ROLE_STUDENT,
+                        'users' => [
+                            ['user_id' => $student1->getKey()],
+                        ],
+                    ]
+                ]
+            ]
+        )->assertJsonFragment(['name' => 'Group of Students'])
+            ->assertJsonFragment(['role_filter' => Course::ROLE_STUDENT])
+            // Student(s) should be added.
+            ->assertJsonFragment(["name" => "Student A"]);
     }
 
     public function testCreateGroup()
@@ -72,7 +96,7 @@ class GroupTest extends ApiTestCase
             ->assertJsonFragment(["name" => "Teacher A"])
             ->assertJsonFragment(["name" => "Teacher B"])
             ->assertJsonFragment(["data" => self::$customData])
-        ->assertDontSeeText("Parent A");
+            ->assertDontSeeText("Parent A");
 
         // Try to rename the group with other User.
         $this->actingAs($this->parentUser)->postJson(
